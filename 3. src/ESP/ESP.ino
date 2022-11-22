@@ -16,7 +16,9 @@
 #include <Arduino_JSON.h>
 const char* ssid = "ROG_Phone3_4601";
 const char* password = "carlios123";
+String scan_result;
 
+#define OPEN_VALVE_DURATION_S 15
 //Your Domain name with URL path or IP address with path
 String serverName = "https://qr-dispenser.herokuapp.com/api/drink";
 
@@ -48,7 +50,6 @@ void setup() {
 void loop() {
 
   // scan QR
-  String scan_result; 
   if(Serial.available()){
     scan_result = Serial.readString();
     scan_result.trim();
@@ -64,8 +65,9 @@ void loop() {
     HTTPClient http;
     String serverPath = serverName + "/" + scan_result;
     // String serverPath = serverName + "/1332102958524";
+    // Serial.println("GET request to " + serverPath);
     if(!scanned){ 
-      Serial.println("Nothing scanned yet");
+      // Serial.println("Nothing scanned yet");
       return;
     }
     scanned = false;
@@ -87,8 +89,6 @@ void loop() {
         return;
       }
 
-      Serial.print("JSON object = ");
-      Serial.println(json);
     }
     else {
       Serial.print("Error code: ");
@@ -102,38 +102,69 @@ void loop() {
       Serial.println("WiFi Disconnected");
   }
 
+  String message;
+  if(json.hasOwnProperty("message")){
+    message = (const char*) json["message"];
+  }
 
-  if(json.hasOwnProperty("success")){
-    Serial.println((const char*) json["success"]);
+
+  // If authenticated
+  if(message == "Success"){
+    // Open valve
+    float water_usage = 0.0;
+    Serial.println("Opening valve");
+
+
+    // Open valve for 15 seconds
+    int timer_start = millis(), timer_end = millis();
+    while((timer_end - timer_start) < OPEN_VALVE_DURATION_S * 1000){
+      // Listen for QR scan
+      if(Serial.available()){
+        scan_result = Serial.readString();
+        scan_result.trim();
+        scanned = true;
+        Serial.println("Scan result = " + scan_result);
+
+        break;
+      }
+
+      // Listen for ultrasonic scanner
+
+
+
+      Serial.println("Waiting 15 seconds");
+      timer_end = millis();
+    }
+
+
+    // Open valve duration ended
+    Serial.println("Valve closed");
+    // Send data to database
+    WiFiClient client;
+    HTTPClient http;
+    String updateWaterUsagePath = serverName + "?qrcode="+ scan_result + "&water_usage=" + String(water_usage);
+    Serial.println("Posting on " + updateWaterUsagePath);
+    http.begin(client, updateWaterUsagePath);
+    http.addHeader("Content-Type", "application/json");
+    String httpRequestData = "{\"qrcode\":\"" + scan_result + "\",\"water_usage\":\"" + String(water_usage) + "\"" + "}";
+    Serial.println("Data sent = " + httpRequestData);
+    int httpResponseCode = http.POST(httpRequestData);
+
+    if(httpResponseCode > 0){
+      Serial.print("http response code POST: ");
+      Serial.println(httpResponseCode);
+      
+    }
+    else{
+      Serial.println("WiFi disconnected");
+    }
+    http.end();
+   
+  }
+  else{ // If not authenticated
+      Serial.println("Not authenticated");
+      return;
   }
   
-  // If autheticated
-  // if(json["message"] == "success"){
-  //   // open valve
-  //   Serial.println("Opening valve");
-  //   int timer_start = millis(), timer_end = millis();
-  //   if((timer_end - timer_start) < 15000){
-  //     Serial.println("Listening for QR");
-  //     Serial.println("Valve opened");
-  //   // if(Serial2.readable()){
-  //   //   return;
-  //   // }
-
-    
-  //    timer_end = millis();
-  //   }
-  //   else{
-  //     Serial.println("Valve closed");
-
-  //     // send data to database
-  //   }
-
-  //   // Listen for QR scan
-
-
-  // }
-  // else{
-  //   Serial.println("Invalid QR Code");
-  // }
   
 }
