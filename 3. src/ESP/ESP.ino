@@ -10,7 +10,7 @@
 */
 
 
-
+#include <string.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Arduino_JSON.h>
@@ -18,7 +18,7 @@ const char* ssid = "ROG_Phone3_4601";
 const char* password = "carlios123";
 String scan_result;
 
-#define OPEN_VALVE_DURATION_S 15
+#define OPEN_VALVE_DURATION_S 10
 //Your Domain name with URL path or IP address with path
 String serverName = "https://qr-dispenser.herokuapp.com/api/drink";
 
@@ -33,6 +33,9 @@ unsigned long timerDelay = 5000;
 
 void setup() {
   Serial.begin(115200); 
+  Serial2.begin(9600);
+  Serial2.setTimeout(100);
+
 
   WiFi.begin(ssid, password);
   Serial.println("Connecting");
@@ -50,9 +53,10 @@ void setup() {
 void loop() {
 
   // scan QR
-  if(Serial.available()){
-    scan_result = Serial.readString();
+  if(Serial2.available() > 0){
+    scan_result = Serial2.readString();
     scan_result.trim();
+    scan_result = scan_result.substring(0, 13);
     scanned = true;
     Serial.println("Scan result = " + scan_result);
 
@@ -111,7 +115,7 @@ void loop() {
   // If authenticated
   if(message == "Success"){
     // Open valve
-    float water_usage = 0.0;
+    float water_usage = 50000.0;
     Serial.println("Opening valve");
 
 
@@ -119,10 +123,11 @@ void loop() {
     int timer_start = millis(), timer_end = millis();
     while((timer_end - timer_start) < OPEN_VALVE_DURATION_S * 1000){
       // Listen for QR scan
-      if(Serial.available()){
-        scan_result = Serial.readString();
+      if(Serial2.available()){
+        scan_result = Serial2.readString();
         scan_result.trim();
         scanned = true;
+        scan_result = scan_result.substring(0, 13);
         Serial.println("Scan result = " + scan_result);
 
         break;
@@ -140,14 +145,18 @@ void loop() {
     // Open valve duration ended
     Serial.println("Valve closed");
     // Send data to database
-    WiFiClient client;
     HTTPClient http;
-    String updateWaterUsagePath = serverName + "?qrcode="+ scan_result + "&water_usage=" + String(water_usage);
+    String updateWaterUsagePath = serverName;
+    //  + "?qrcode="+ scan_result + "&water_usage=" + String(water_usage);
     Serial.println("Posting on " + updateWaterUsagePath);
-    http.begin(client, updateWaterUsagePath);
-    http.addHeader("Content-Type", "application/json");
-    String httpRequestData = "{\"qrcode\":\"" + scan_result + "\",\"water_usage\":\"" + String(water_usage) + "\"" + "}";
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    // String httpRequestData = "{\"qrcode\":\"" + scan_result + "\",\"water_usage\":\"" + String(water_usage) + "\"" + "}";
+    String httpRequestData = "qrcode=" + scan_result + "&water_usage=" + String(water_usage);
     Serial.println("Data sent = " + httpRequestData);
+
+    // POSTING
     int httpResponseCode = http.POST(httpRequestData);
 
     if(httpResponseCode > 0){
@@ -162,9 +171,13 @@ void loop() {
    
   }
   else{ // If not authenticated
+      Serial.println("httpresponse code POST: ");
+      // Serial.println(httpResponseCode);
       Serial.println("Not authenticated");
       return;
   }
   
+  // clear Serial
+  Serial2.flush();
   
 }
