@@ -9,7 +9,7 @@
   copies or substantial portions of the Software.
 */
 
-
+#include <HCSR04.h>
 #include <string.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -19,6 +19,9 @@ const char* password = "carlios123";
 String scan_result;
 
 #define OPEN_VALVE_DURATION_S 10
+#define TRIG_PIN 22
+#define ECHO_PIN 23
+
 //Your Domain name with URL path or IP address with path
 String serverName = "https://qr-dispenser.herokuapp.com/api/drink";
 
@@ -30,6 +33,8 @@ bool scanned = false;
 //unsigned long timerDelay = 600000;
 // Set timer to 5 seconds (5000)
 unsigned long timerDelay = 5000;
+
+HCSR04 hc(TRIG_PIN, ECHO_PIN);
 
 void setup() {
   Serial.begin(115200); 
@@ -48,6 +53,7 @@ void setup() {
   Serial.println(WiFi.localIP());
  
   Serial.println("Timer set to 5 seconds (timerDelay variable), it will take 5 seconds before publishing the first reading.");
+
 }
 
 void loop() {
@@ -134,10 +140,9 @@ void loop() {
       }
 
       // Listen for ultrasonic scanner
-
-
-
-      Serial.println("Waiting 15 seconds");
+      if(hc.dist() != 0.00 && hc.dist() < 10.00){
+        Serial.println("Filling bottle");
+      }
       timer_end = millis();
     }
 
